@@ -2,14 +2,9 @@
 
 
 
-## ⚙️ Installation
 
+### **Run below to activate the local 3D reconstruction**
 
-### **Install COLMAP**
-This is done easiest through [Brew](https://brew.sh/):
-```bash
-brew install colmap
-```
 
 ```bash
 python colmap_gradio.py
