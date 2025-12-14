@@ -14,6 +14,7 @@ def scale_images(workspace, scaling_option):
       - Eighth: 12.5% size
       - 1600k: longest dimension set to 1600 pixels (only downscale if larger)
     """
+
     workspace = os.path.abspath(workspace)
     images_folder = os.path.join(workspace, "images")
     original_folder = os.path.join(workspace, "images_original")
@@ -155,7 +156,7 @@ def process_workflow(workspace, scaling_option, matching_type):
 
 # Build a single-page Gradio interface.
 with gr.Blocks() as demo:
-    gr.Markdown("# COLMAP Workflow with Optional Image Scaling")
+    gr.Markdown("# Volumes, Inc COLMAP Workflow with Optional Image Scaling")
     gr.Markdown(
         "Provide the workspace directory (which must contain an `images` folder). "
         "Choose a scaling option and a COLMAP feature matching method. "
