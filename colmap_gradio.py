@@ -137,45 +137,114 @@ def run_colmap(workspace, matching_type):
 
     return "\n".join(log)
 
-def process_workflow(workspace, scaling_option, matching_type):
+def process_workflow(workspace):
     """
-    This function first scales the images (unless 'No Scaling' is selected)
-    and then runs COLMAP on the workspace.
+    This function scales the images using a fixed 1600k option and then runs
+    COLMAP on the workspace using Exhaustive feature matching.
     """
+    # Fixed defaults as requested
+    scaling_option = "1600k"
+    matching_type = "Exhaustive"
+
     logs = []
-    logs.append("=== Image Preparation ===")
-    # Run image scaling if needed.
+    logs.append("=== Image Preparation (Scaling: 1600k) ===")
+    # Always run image scaling with the fixed option.
     scale_result = scale_images(workspace, scaling_option)
     logs.append(scale_result)
     
-    logs.append("\n=== Running COLMAP Reconstruction ===")
+    logs.append("\n=== Running COLMAP Reconstruction (Matching: Exhaustive) ===")
     colmap_result = run_colmap(workspace, matching_type)
     logs.append(colmap_result)
     
     return "\n".join(logs)
 
-# Build a single-page Gradio interface.
+
+def extract_frames_from_video(workspace, fps_choice):
+    """
+    Given a workspace directory that contains a `video` folder with at least one
+    .mp4 file, extract frames from the first .mp4 file into an `images` folder
+    using ffmpeg at the selected FPS.
+
+    The command executed is equivalent to:
+        ffmpeg -i video_name.mp4 -vf fps=<FPS> images/frame_%04d.png
+    where `video_name.mp4` is taken from the `video` folder and `images` is a
+    folder inside the same workspace (created if it does not already exist).
+    """
+    # Ensure fps is a valid integer string (Gradio may pass it as str)
+    try:
+        fps = int(fps_choice)
+    except (ValueError, TypeError):
+        return f"Error: Invalid FPS value '{fps_choice}'. Please choose one of 2, 5, 7, or 10."
+
+    workspace = os.path.abspath(workspace)
+    video_folder = os.path.join(workspace, "video")
+    images_folder = os.path.join(workspace, "images")
+
+    if not os.path.isdir(video_folder):
+        return f"Error: The 'video' folder was not found at {video_folder}"
+
+    # Find the first .mp4 file in the video folder.
+    mp4_files = [f for f in os.listdir(video_folder) if f.lower().endswith(".mp4")]
+    if not mp4_files:
+        return f"Error: No .mp4 files found in {video_folder}"
+
+    video_name = mp4_files[0]
+    video_path = os.path.join(video_folder, video_name)
+
+    # Ensure the images folder exists.
+    os.makedirs(images_folder, exist_ok=True)
+
+    output_pattern = os.path.join(images_folder, "frame_%04d.png")
+    cmd = f'ffmpeg -i "{video_path}" -vf fps={fps} "{output_pattern}"'
+
+    log = []
+    log.append(f"Workspace: {workspace}")
+    log.append(f"Using video file: {video_path}")
+    log.append(f"Target FPS: {fps}")
+    log.append(f"Images will be saved to: {images_folder}")
+    log.append(f"Running: {cmd}")
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+    if result.stdout:
+        log.append("STDOUT:")
+        log.append(result.stdout)
+    if result.stderr:
+        log.append("STDERR:")
+        log.append(result.stderr)
+
+    if result.returncode == 0:
+        log.append("Frame extraction completed successfully.")
+    else:
+        log.append(f"Error: ffmpeg exited with code {result.returncode}.")
+
+    return "\n".join(log)
+
 with gr.Blocks() as demo:
-    gr.Markdown("# Volumes, Inc COLMAP Workflow with Optional Image Scaling")
+    gr.Markdown("# Volumes, Inc COLMAP Workflow")
     gr.Markdown(
-        "Provide the workspace directory (which must contain an `images` folder). "
-        "Choose a scaling option and a COLMAP feature matching method. "
-        "If a scaling option other than 'No Scaling' is selected, the current "
-        "`images` folder will be renamed to `images_original` and resized images "
-        "will be saved in a new `images` folder. COLMAP is then run on these images."
+        "Provide the workspace directory (which must contain an `images` folder, "
+        "or a `video` folder if you want to extract frames first). "
+        "The workflow will automatically scale images using the **1600k** option "
+        "and run COLMAP with **Exhaustive** feature matching."
     )
-    
+
     workspace_input = gr.Textbox(label="Workspace Directory", placeholder="/path/to/workspace")
-    scaling_input = gr.Radio(choices=["No Scaling", "Half", "Quarter", "Eighth", "1600k"],
-                              label="Image Scaling Option",
-                              value="No Scaling")
-    matching_input = gr.Radio(choices=["Exhaustive", "Sequential", "Spatial"],
-                               label="COLMAP Feature Matching Type",
-                               value="Exhaustive")
-    
-    run_button = gr.Button("Run Workflow")
+    fps_input = gr.Radio(
+        choices=["2", "5", "7", "10"],
+        label="Frames per Second for Video Extraction",
+        value="5"
+    )
+
+    run_button = gr.Button("Run Workflow (Scale 1600k + Exhaustive Matching)")
+    extract_button = gr.Button("Extract Frames from Video")
     output_log = gr.Textbox(label="Processing Log", lines=25)
 
-    run_button.click(fn=process_workflow, inputs=[workspace_input, scaling_input, matching_input], outputs=output_log)
+    run_button.click(fn=process_workflow, inputs=workspace_input, outputs=output_log)
+    extract_button.click(
+        fn=extract_frames_from_video,
+        inputs=[workspace_input, fps_input],
+        outputs=output_log
+    )
 
 demo.launch()
