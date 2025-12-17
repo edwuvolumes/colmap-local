@@ -221,22 +221,21 @@ def extract_frames_from_video(workspace, fps_choice):
     return "\n".join(log)
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Volumes, Inc COLMAP Workflow")
+    gr.Markdown("# Volumes, Inc 3D Reconstruction Post-Processing Workflow")
     gr.Markdown(
-        "Provide the workspace directory (which must contain an `images` folder, "
-        "or a `video` folder if you want to extract frames first). "
-        "The workflow will automatically scale images using the **1600k** option "
-        "and run COLMAP with **Exhaustive** feature matching."
+        "Provide the path directory that contain the video files.
+        "The click on Extract Frames from Video to extract the frames from the video. here you can also choose how many frames per second to extract. "
+        "Once the frames is extracted, Click on run 3D Rescontruction to run the 3D reconstruction."
     )
 
-    workspace_input = gr.Textbox(label="Workspace Directory", placeholder="/path/to/workspace")
+    workspace_input = gr.Textbox(label="File Path", placeholder="/path/to/files")
     fps_input = gr.Radio(
         choices=["2", "5", "7", "10"],
         label="Frames per Second for Video Extraction",
         value="5"
     )
 
-    run_button = gr.Button("Run Workflow (Scale 1600k + Exhaustive Matching)")
+    run_button = gr.Button("Run 3D Reconstruction")
     extract_button = gr.Button("Extract Frames from Video")
     output_log = gr.Textbox(label="Processing Log", lines=25)
 
