@@ -7,7 +7,7 @@
 
 
 ```bash
-python colmap_gradio.py
+python postprocessing_app.py
 ```
 
 
