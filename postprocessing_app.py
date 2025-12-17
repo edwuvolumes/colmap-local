@@ -220,10 +220,86 @@ def extract_frames_from_video(workspace, fps_choice):
 
     return "\n".join(log)
 
+
+def segment_video(workspace, mins_per_file):
+    """
+    Given a workspace directory that contains a `video` folder with at least one
+    .mp4 file, segment each video file into chunks based on the specified duration
+    in minutes per file.
+
+    The segmented videos will be saved in a `segmented_videos` folder within the workspace.
+    The command executed is equivalent to:
+        ffmpeg -i video_name.mp4 -c copy -f segment -segment_time <seconds> -reset_timestamps 1 -segment_format mp4 segmented_videos/video_name_%03d.mp4
+    """
+    # Ensure mins_per_file is a valid number
+    try:
+        mins = float(mins_per_file)
+        if mins <= 0:
+            return f"Error: 'mins per file' must be greater than 0. Got: {mins}"
+        segment_time_seconds = int(mins * 60)
+    except (ValueError, TypeError):
+        return f"Error: Invalid 'mins per file' value '{mins_per_file}'. Please provide a valid number."
+
+    workspace = os.path.abspath(workspace)
+    video_folder = os.path.join(workspace, "video")
+    segmented_folder = os.path.join(workspace, "segmented_videos")
+
+    if not os.path.isdir(video_folder):
+        return f"Error: The 'video' folder was not found at {video_folder}"
+
+    # Find all .mp4 files in the video folder.
+    mp4_files = [f for f in os.listdir(video_folder) if f.lower().endswith(".mp4")]
+    if not mp4_files:
+        return f"Error: No .mp4 files found in {video_folder}"
+
+    # Ensure the segmented_videos folder exists.
+    os.makedirs(segmented_folder, exist_ok=True)
+
+    log = []
+    log.append(f"Workspace: {workspace}")
+    log.append(f"Segment duration: {mins} minutes ({segment_time_seconds} seconds) per file")
+    log.append(f"Segmented videos will be saved to: {segmented_folder}")
+
+    all_successful = True
+    for video_name in mp4_files:
+        video_path = os.path.join(video_folder, video_name)
+        video_base_name = os.path.splitext(video_name)[0]
+        output_pattern = os.path.join(segmented_folder, f"{video_base_name}_%03d.mp4")
+        
+        # Use ffmpeg segment muxer to split the video
+        cmd = f'ffmpeg -i "{video_path}" -c copy -f segment -segment_time {segment_time_seconds} -reset_timestamps 1 -segment_format mp4 "{output_pattern}"'
+        
+        log.append(f"\n=== Processing: {video_name} ===")
+        log.append(f"Running: {cmd}")
+
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+        if result.stdout:
+            log.append("STDOUT:")
+            log.append(result.stdout)
+        if result.stderr:
+            # ffmpeg outputs to stderr even on success, so check return code
+            if result.returncode != 0:
+                log.append("STDERR:")
+                log.append(result.stderr)
+
+        if result.returncode == 0:
+            log.append(f"Successfully segmented {video_name}")
+        else:
+            log.append(f"Error: ffmpeg exited with code {result.returncode} for {video_name}.")
+            all_successful = False
+
+    if all_successful:
+        log.append("\nVideo segmentation completed successfully.")
+    else:
+        log.append("\nVideo segmentation completed with some errors. Please check the log above.")
+
+    return "\n".join(log)
+
 with gr.Blocks() as demo:
     gr.Markdown("# Volumes, Inc 3D Reconstruction Post-Processing Workflow")
     gr.Markdown(
-        "Provide the path directory that contain the video files.
+        "Provide the path directory that contain the video files."
         "The click on Extract Frames from Video to extract the frames from the video. here you can also choose how many frames per second to extract. "
         "Once the frames is extracted, Click on run 3D Rescontruction to run the 3D reconstruction."
     )
@@ -234,15 +310,26 @@ with gr.Blocks() as demo:
         label="Frames per Second for Video Extraction",
         value="5"
     )
+    mins_per_file_input = gr.Textbox(
+        label="Mins per file",
+        placeholder="5",
+        value="5"
+    )
 
     run_button = gr.Button("Run 3D Reconstruction")
     extract_button = gr.Button("Extract Frames from Video")
+    segment_button = gr.Button("Segment video")
     output_log = gr.Textbox(label="Processing Log", lines=25)
 
     run_button.click(fn=process_workflow, inputs=workspace_input, outputs=output_log)
     extract_button.click(
         fn=extract_frames_from_video,
         inputs=[workspace_input, fps_input],
+        outputs=output_log
+    )
+    segment_button.click(
+        fn=segment_video,
+        inputs=[workspace_input, mins_per_file_input],
         outputs=output_log
     )
 
